@@ -1,0 +1,2 @@
+SCons==4.10.1
+scons-compiledb==0.7.4

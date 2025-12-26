@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "flake.lock": "json",
+        "*.uix": "nix",
+        "init.h": "c",
+        "defs.h": "c"
+    }
+}

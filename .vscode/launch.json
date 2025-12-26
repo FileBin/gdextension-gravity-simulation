@@ -1,0 +1,13 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "preLaunchTask": "build",
+            "name": "Launch",
+            "program": "godot",
+            "args": [ "--editor" ],
+            "cwd": "${workspaceFolder}/demo"
+        }
+    ]
+}

@@ -1,0 +1,12 @@
+.directory
+demo/bin
+obj
+compile_commands.json
+.compile_commands.json
+.cache
+
+.sconsign.dblite
+config.log
+.sconf_temp
+
+demo/.godot

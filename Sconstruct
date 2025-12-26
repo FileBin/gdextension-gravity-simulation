@@ -1,0 +1,34 @@
+#!/usr/bin/env python
+from SCons.Script import Environment
+from os import path, environ
+import sys
+import scons_compiledb
+
+VariantDir('obj', 'src', duplicate=0)
+
+env = Environment(ENV={
+    'PATH': environ['PATH'],
+    'CC': environ['CC'],
+})
+
+scons_compiledb.enable_with_cmdline(env)
+
+# Set the target path and name.
+target_path = "demo/bin/"
+target_name = "libgravsim"
+
+# Set the compiler and flags.
+env.Append(CPPPATH=["src"])  # Add the src folder to the include path.
+env.Append(CFLAGS=["-O0", "-g"])  # Make it a debug build.
+
+# Add all C files in "src" folder as sources.
+sources = env.Glob("obj/*.c")
+
+# Create a shared library.
+library = env.SharedLibrary(
+    target=path.join(target_path, target_name),
+    source=sources,
+)
+
+# Set the library as the default target.
+env.Default(library)

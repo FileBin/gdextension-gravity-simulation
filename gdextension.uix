@@ -1,0 +1,60 @@
+#!/usr/bin/env uix-shell
+with (import <nixpkgs> { });
+mkShell {
+  packages = [
+    nixd
+    godot_4
+    pixi
+    python3
+    gcc
+    lldb
+    clang-tools
+    (vscode-with-extensions.override {
+      vscodeExtensions =
+        with vscode-extensions;
+        [
+          ms-vscode.hexeditor
+          tal7aouy.icons
+          jnoortheen.nix-ide
+          wmaurer.change-case
+          ms-python.python
+          ms-vscode.cpptools
+          llvm-vs-code-extensions.vscode-clangd
+          vadimcn.vscode-lldb
+          vscode-extensions.geequlim.godot-tools
+        ]
+        ++ vscode-utils.extensionsFromVscodeMarketplace [
+          {
+            name = "cppincludeguard";
+            publisher = "akiramiyakoda";
+            version = "1.8.0";
+            hash = "sha256-WXh3fu6rQTbIKbLAtK6Q4OHFSChQQlIz8z1a04mQq48=";
+          }
+          {
+            name = "godot-files";
+            publisher = "alfish";
+            version = "0.1.6";
+            hash = "sha256-FFtl1QXSa4nGKFUJh5f3R7AV7hZg59Qs5vBZHgSUCUw=";
+          }
+        ];
+    })
+  ];
+
+  shellHook = ''
+    SOURCE_DATE_EPOCH=$(date +%s)
+    VENV=.venv
+
+    if test ! -d $VENV; then
+      python3 -m venv $VENV
+    fi
+    source ./$VENV/bin/activate
+    pip install -r requirements.txt
+
+    export CC="${gcc}/bin/gcc"
+    export TMPDIR=$UIX_SHELL_TMP
+
+    scons --compiledb=
+
+    code .
+  '';
+}
