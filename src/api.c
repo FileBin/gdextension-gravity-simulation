@@ -28,8 +28,14 @@ void load_api(GDExtensionInterfaceGetProcAddress p_get_proc_address)
     api.classdb_construct_object = (GDExtensionInterfaceClassdbConstructObject)p_get_proc_address("classdb_construct_object");
     api.get_variant_from_type_constructor = (GDExtensionInterfaceGetVariantFromTypeConstructor)p_get_proc_address("get_variant_from_type_constructor");
     api.get_variant_to_type_constructor = (GDExtensionInterfaceGetVariantToTypeConstructor)p_get_proc_address("get_variant_to_type_constructor");
+    
     api.variant_get_type = (GDExtensionInterfaceVariantGetType)p_get_proc_address("variant_get_type");
     api.variant_get_object_instance_id = (GDExtensionInterfaceVariantGetObjectInstanceId)p_get_proc_address("variant_get_object_instance_id");
+
+    api.variant_iter_init = (GDExtensionInterfaceVariantIterInit)p_get_proc_address("variant_iter_init");
+    api.variant_iter_next = (GDExtensionInterfaceVariantIterNext)p_get_proc_address("variant_iter_next");
+    api.variant_iter_get = (GDExtensionInterfaceVariantIterGet)p_get_proc_address("variant_iter_get");
+
     api.object_set_instance = (GDExtensionInterfaceObjectSetInstance)p_get_proc_address("object_set_instance");
     api.object_set_instance_binding = (GDExtensionInterfaceObjectSetInstanceBinding)p_get_proc_address("object_set_instance_binding");
     api.object_cast_to = (GDExtensionInterfaceObjectCastTo)p_get_proc_address("object_cast_to");
@@ -57,6 +63,7 @@ void load_api(GDExtensionInterfaceGetProcAddress p_get_proc_address)
 
 void bind_api() {
     methods.node_get_parent = get_method_bind("Node", "get_parent", 3160264692);
+    methods.node_get_children = get_method_bind("Node", "get_children", 873284517);
     methods.node_get_tree = get_method_bind("Node", "get_tree", 2958820483);
     methods.object_connect = get_method_bind("Object", "connect", 1518946055);
 }

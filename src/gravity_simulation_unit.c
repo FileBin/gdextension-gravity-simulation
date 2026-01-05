@@ -11,7 +11,6 @@ const GDExtensionInstanceBindingCallbacks gravity_simulation_unit_class_binding_
 
 void gravity_simulation_unit_class_constructor(GravitySimulationUnit *self) {
     self->mass = 1;
-    self->rigidbody = NULL;
 }
 
 void gravity_simulation_unit_class_destructor(GravitySimulationUnit *self) {}
@@ -23,54 +22,13 @@ void gravity_simulation_unit_class_bind_methods() {
 }
 
 void *gravity_simulation_unit_class_get_virtual_with_data(void *p_class_userdata, GDExtensionConstStringNamePtr p_name) {
-    if (is_string_name_equal(p_name, "_ready")) {
-        return (void *)gravity_simulation_unit_class_ready;
-    }
-    // Otherwise, return NULL.
     return NULL;
 }
 
-void gravity_simulation_unit_class_call_virtual_with_data(GDExtensionClassInstancePtr p_instance, GDExtensionConstStringNamePtr p_name, void *p_virtual_call_userdata, const GDExtensionConstTypePtr *p_args, GDExtensionTypePtr r_ret){
-    if (p_virtual_call_userdata == &gravity_simulation_unit_class_ready)
-    {
-        ptrcall_0_args_no_ret(p_virtual_call_userdata, p_instance, p_args, r_ret);
-    }
-}
+void gravity_simulation_unit_class_call_virtual_with_data(GDExtensionClassInstancePtr p_instance, GDExtensionConstStringNamePtr p_name, void *p_virtual_call_userdata, const GDExtensionConstTypePtr *p_args, GDExtensionTypePtr r_ret) { }
 
 
-void gravity_simulation_unit_class_ready(GravitySimulationUnit *self) {
-    GDObjectInstanceID parent_instance_id;
-    GDExtensionObjectPtr parent_node, parent_object, rigidbody_object;
-    Variant variant_ret;
-    void* rigidbody2d_class_tag, *node_class_tag;
-    GDExtensionConstVariantPtr args[] = {};
-
-    rigidbody2d_class_tag = classdb_get_class_tag("RigidBody2D");
-    node_class_tag = classdb_get_class_tag("Node");
-
-    parent_object = self->node2d;
-
-    do {
-        parent_node = api.object_cast_to(parent_object, node_class_tag);
-        
-        if (!parent_node) 
-            break;
-
-        api.object_method_bind_call(methods.node_get_parent, parent_node, args, 0, &variant_ret, NULL);
-        parent_instance_id = api.variant_get_object_instance_id(&variant_ret);
-        
-        if (!parent_instance_id)
-            break;
-        
-        parent_object = api.object_get_instance_from_id(parent_instance_id);
-        rigidbody_object = api.object_cast_to(parent_object, rigidbody2d_class_tag);
-
-        if (rigidbody_object) {
-            self->rigidbody = rigidbody_object;
-            break;
-        }
-    } while(parent_node);
-}
+void gravity_simulation_unit_class_ready(GravitySimulationUnit *self) { }
 
 GDExtensionObjectPtr gravity_simulation_unit_class_create_instance(void *p_class_userdata)
 {

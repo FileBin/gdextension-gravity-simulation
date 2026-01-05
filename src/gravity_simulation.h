@@ -3,17 +3,17 @@
 
 #include "gdextension_interface.h"
 #include "gravity_simulation_unit.h"
+#include <stdbool.h>
 
 // Struct to hold the node data.
 typedef struct {
     // Metadata.
     GDExtensionObjectPtr object; // Stores the underlying Godot object.
 
+    bool visit_tree;
+
     // acceleration structure to not go through sub node every frame
-    struct {
-        GDExtensionObjectPtr rigidbody;
-        GravitySimulationUnit **units; // array of pointers to GravitySimulationUnit objects in scene tree
-    } *gravity_clusters; // array of GravitySimulationUnits grouped by RigidBody they belong to
+    struct linked_list_cluster *gravity_clusters; // array of GravitySimulationUnits grouped by RigidBody they belong to
 } GravitySimulation;
 
 // Bindings.
@@ -33,6 +33,6 @@ void gravity_simulation_class_destructor(GravitySimulation *self);
 // Methods
 void gravity_simulation_class_ready(GravitySimulation *self);
 void gravity_simulation_class_on_tree_changed(GravitySimulation *self);
-
+void gravity_simulation_class_process(GravitySimulation *self, double delta);
 
 #endif /* C94C2966_B644_4B19_B0E3_CDE07BA11608 */

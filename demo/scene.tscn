@@ -14,4 +14,5 @@ script = ExtResource("1_ulcgi")
 [node name="GravitySimulationUnit" type="GravitySimulationUnit" parent="GravitySimulation/RigidBody2D"]
 
 [node name="CollisionShape2D" type="CollisionShape2D" parent="GravitySimulation/RigidBody2D"]
+position = Vector2(171, 311)
 shape = SubResource("CircleShape2D_ulcgi")

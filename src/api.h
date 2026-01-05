@@ -21,9 +21,10 @@ struct Constructors
     GDExtensionVariantFromTypeConstructorFunc variant_from_string_name_constructor;
     GDExtensionVariantFromTypeConstructorFunc variant_from_object_constructor;
     GDExtensionVariantFromTypeConstructorFunc variant_from_float_constructor;
+    GDExtensionInterfaceStringNewWithUtf8Chars string_new_with_utf8_chars;
+    
     GDExtensionTypeFromVariantConstructorFunc float_from_variant_constructor;
     GDExtensionInterfaceVariantConstruct variant_construct;
-    GDExtensionInterfaceStringNewWithUtf8Chars string_new_with_utf8_chars;
 };
 
 struct Destructors
@@ -36,6 +37,7 @@ struct Destructors
 struct Methods
 {
     GDExtensionMethodBindPtr node_get_parent;
+    GDExtensionMethodBindPtr node_get_children;
     GDExtensionMethodBindPtr node_get_tree;
     GDExtensionMethodBindPtr object_connect;
 };
@@ -66,7 +68,10 @@ struct API
     GDExtensionInterfaceGetVariantToTypeConstructor get_variant_to_type_constructor;
     GDExtensionInterfaceVariantGetType variant_get_type;
     GDExtensionInterfaceVariantGetObjectInstanceId variant_get_object_instance_id;
-    
+    GDExtensionInterfaceVariantIterInit variant_iter_init;
+    GDExtensionInterfaceVariantIterNext variant_iter_next;
+    GDExtensionInterfaceVariantIterGet variant_iter_get;
+
     GDExtensionInterfaceMemAlloc mem_alloc;
     GDExtensionInterfaceMemFree mem_free;
 };

@@ -8,8 +8,6 @@ typedef struct {
     // Metadata.
     GDExtensionObjectPtr node2d; // Stores the underlying Godot object.
     real mass;
-    
-    GDExtensionObjectPtr rigidbody;
 } GravitySimulationUnit;
 
 GDExtensionObjectPtr gravity_simulation_unit_class_create_instance(void *p_class_userdata);
@@ -19,8 +17,6 @@ void gravity_simulation_unit_class_constructor(GravitySimulationUnit *self);
 void gravity_simulation_unit_class_destructor(GravitySimulationUnit *self);
 
 void gravity_simulation_unit_class_bind_methods();
-
-void gravity_simulation_unit_class_ready(GravitySimulationUnit *self);
 
 void *gravity_simulation_unit_class_get_virtual_with_data(void *p_class_userdata, GDExtensionConstStringNamePtr p_name);
 void gravity_simulation_unit_class_call_virtual_with_data(GDExtensionClassInstancePtr p_instance, GDExtensionConstStringNamePtr p_name, void *p_virtual_call_userdata, const GDExtensionConstTypePtr *p_args, GDExtensionTypePtr r_ret);
