@@ -68,3 +68,27 @@ void gravity_simulation_unit_class_set_mass(GravitySimulationUnit* self, double 
 double gravity_simulation_unit_class_get_mass(GravitySimulationUnit* self) {
     return (double)self->mass;
 }
+
+Vector2 gravity_simulation_unit_class_get_position(GravitySimulationUnit* self) {
+    Vector2 position;
+    Variant ret;
+    GDExtensionConstVariantPtr args[] = {};
+    api.object_method_bind_call(methods.node2d_get_position, self->node2d, args,
+                                0, &ret, NULL);
+    
+    constructors.vector2_from_variant_constructor(&position, &ret);
+
+    return position;
+}
+
+Vector2 gravity_simulation_unit_class_get_global_position(GravitySimulationUnit* self) {
+    Vector2 position;
+    Variant ret;
+    GDExtensionConstVariantPtr args[] = {};
+    api.object_method_bind_call(methods.node2d_get_global_position, self->node2d, args,
+                                0, &ret, NULL);
+    
+    constructors.vector2_from_variant_constructor(&position, &ret);
+    destructors.variant_destroy(&ret);
+    return position;
+}

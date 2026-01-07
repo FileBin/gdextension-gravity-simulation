@@ -3,16 +3,29 @@
 #include "defs.h"
 #include "gdextension_interface.h"
 #include "gravity_simulation_unit.h"
+#include "sys/types.h"
+#include <math.h>
 #include <stdbool.h>
-#include <stdio.h>
+#include <stddef.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define LINKED_LIST_TYPE GDExtensionObjectPtr
 #include "linked_list.h"
 #undef LINKED_LIST_TYPE
 
+typedef GravitySimulationUnit *GravitySimulationUnitPtr;
+
+#define LINKED_LIST_TYPE GravitySimulationUnitPtr
+#include "linked_list.h"
+#undef LINKED_LIST_TYPE
+
+extern const GDExtensionInstanceBindingCallbacks gravity_simulation_unit_class_binding_callbacks;
+
 typedef struct {
   GDExtensionObjectPtr rigidbody;
-  linked_list_GDExtensionObjectPtr *units; // list of pointers to GravitySimulationUnit objects in scene tree
+  uint units_count;
+  linked_list_GravitySimulationUnitPtr *units_list; // list of pointers to GravitySimulationUnit objects in scene tree
 } cluster;
 
 #define LINKED_LIST_TYPE cluster
@@ -27,8 +40,12 @@ const GDExtensionInstanceBindingCallbacks
 };
 
 void gravity_simulation_class_constructor(GravitySimulation *self) {
-  self->gravity_clusters = NULL;
+  self->gravity_clusters.clusters_count = 0;
+  self->gravity_clusters.clusters_list = NULL;
+
   self->visit_tree = true;
+
+  self->G = 6.67 * 100000;
 }
 
 void *gravity_simulation_class_get_virtual_with_data(
@@ -63,6 +80,23 @@ void gravity_simulation_class_destructor(GravitySimulation *self) {}
 void gravity_simulation_class_bind_methods() {
   bind_method_0("GravitySimulation", "_on_tree_changed",
                 gravity_simulation_class_on_tree_changed);
+
+  bind_method_0_r("GravitySimulation", "get_G",
+                  gravity_simulation_class_get_G,
+                  GDEXTENSION_VARIANT_TYPE_FLOAT);
+  bind_method_1("GravitySimulation", "set_G",
+                gravity_simulation_class_set_G, "G",
+                GDEXTENSION_VARIANT_TYPE_FLOAT);
+  bind_property("GravitySimulation", "G", GDEXTENSION_VARIANT_TYPE_FLOAT,
+                "get_G", "set_G");
+}
+
+void gravity_simulation_class_set_G(GravitySimulation* self, double G) {
+  self->G = G;
+}
+
+double gravity_simulation_class_get_G(GravitySimulation* self) {
+  return self->G;
 }
 
 GDExtensionObjectPtr
@@ -156,19 +190,66 @@ void gravity_simulation_class_ready(GravitySimulation *self) {
   }
 }
 
+typedef struct {
+  Vector2 force;
+  Vector2 point;
+} force_info;
+
+typedef struct {
+  force_info* forces;
+  linked_list_GravitySimulationUnitPtr* units;
+  GDExtensionObjectPtr rigidbody2d;
+  uint count;
+} cluster_forces;
+
+typedef struct {
+  cluster_forces *cluster_forces;
+  uint count;
+} cluster_force_info;
+
 void update_clusters(GravitySimulation *self);
+cluster_force_info run_simulation_CPU(GravitySimulation *self);
 
 void gravity_simulation_class_process(GravitySimulation *self, double delta) {
+  if (is_editor()) {
+    return;
+  }
+
   if (self->visit_tree) {
     self->visit_tree = false;
     update_clusters(self);
   }
+  
+  cluster_force_info simulation_result = run_simulation_CPU(self);
+
+  for (uint i = 0; i < simulation_result.count; i++) {
+    cluster_forces cluster_forces = simulation_result.cluster_forces[i];
+    GDExtensionObjectPtr rigidbody2d = cluster_forces.rigidbody2d;
+    for (uint j = 0; j < cluster_forces.count; j++) {
+      force_info unit_forces_info = cluster_forces.forces[j];
+
+      Variant force, position, ret;
+
+      constructors.variant_from_vector2_constructor(&force, &unit_forces_info.force);
+      constructors.variant_from_vector2_constructor(&position, &unit_forces_info.point);
+
+      GDExtensionConstVariantPtr args[] = {&force, &position};
+      api.object_method_bind_call(methods.rigidbody2d_apply_force, rigidbody2d, args, 2, &ret, NULL);
+
+      destructors.variant_destroy(&force);
+      destructors.variant_destroy(&position);
+      destructors.variant_destroy(&ret);
+    }
+
+    if (cluster_forces.forces)
+      free(cluster_forces.forces);
+  }
+
+  if (simulation_result.cluster_forces)
+    free(simulation_result.cluster_forces);
 }
 
 void gravity_simulation_class_on_tree_changed(GravitySimulation *self) {
-  // TODO iterate over tree
-  // NOTE: set tree changed flag and update in _process cause its too many
-  // messages per frame
   self->visit_tree = true;
 }
 
@@ -178,12 +259,13 @@ void update_clusters(GravitySimulation *self) {
   void *rigidbody2d_class_tag = classdb_get_class_tag("RigidBody2D");
 
   linked_list_cluster *clusters = 0;
+  uint clusters_count = 0;
 
   linked_list_GDExtensionObjectPtr *stack = 0;
 
   linked_list_GDExtensionObjectPtr_push_front(&stack, self->object);
 
-  linked_list_GDExtensionObjectPtr** current_units_list_ptr = 0;
+  cluster* current_cluster_ptr = 0;
 
   while (stack) {
     Variant children_variant_ret, child_variant_ret;
@@ -197,17 +279,21 @@ void update_clusters(GravitySimulation *self) {
       cluster new_cluster;
 
       new_cluster.rigidbody = found_rigidbody2d;
-      new_cluster.units = 0;
+      new_cluster.units_list = 0;
+      new_cluster.units_count = 0;
       linked_list_cluster_push_front(&clusters, new_cluster);
-      current_units_list_ptr = &clusters->data.units;
+      clusters_count++;
+      current_cluster_ptr = &clusters->data;
     } else {
 
       GDExtensionObjectPtr found_unit =
           api.object_cast_to(node, gravity_simulation_unit_class_tag);
 
       if (found_unit) {
-        if (current_units_list_ptr) {
-          linked_list_GDExtensionObjectPtr_push_front(current_units_list_ptr, found_unit);
+        GravitySimulationUnitPtr unit = api.object_get_instance_binding(found_unit, class_library, NULL);
+        if (current_cluster_ptr && unit) {
+          linked_list_GravitySimulationUnitPtr_push_front(&current_cluster_ptr->units_list, unit);
+          current_cluster_ptr->units_count++;
         }
       }
     }
@@ -229,6 +315,8 @@ void update_clusters(GravitySimulation *self) {
       api.variant_iter_get(&children_variant_ret, &iter, &child_variant_ret, &valid);
       if (valid) {
         GDObjectInstanceID child_instance_id = api.variant_get_object_instance_id(&child_variant_ret);
+        destructors.variant_destroy(&child_variant_ret);
+
         if (child_instance_id) {
           GDExtensionObjectPtr child_node = api.object_get_instance_from_id(child_instance_id);
 
@@ -243,8 +331,103 @@ void update_clusters(GravitySimulation *self) {
       }
     }
 
+    destructors.variant_destroy(&children_variant_ret);
+
     if (error.error != GDEXTENSION_CALL_OK) {
       return;
     }
   }
+
+  self->gravity_clusters.clusters_count = clusters_count;
+  linked_list_cluster *old_list = self->gravity_clusters.clusters_list;
+  self->gravity_clusters.clusters_list = clusters;
+
+  for (linked_list_cluster *iter = old_list; iter; iter = iter->p_next) {
+    linked_list_GravitySimulationUnitPtr_destroy(iter->data.units_list);
+  }
+  linked_list_cluster_destroy(old_list);
+}
+
+cluster_force_info run_simulation_CPU(GravitySimulation *self) {
+  if (self->gravity_clusters.clusters_count < 1) {
+    cluster_force_info empty = {
+      .count = 0,
+      .cluster_forces = 0,
+    };
+
+    return empty;
+  }
+
+  double G = self->G;
+
+  cluster_force_info cluster_force_info;
+
+  cluster_force_info.count = self->gravity_clusters.clusters_count;
+
+  cluster_force_info.cluster_forces = calloc(cluster_force_info.count, sizeof(cluster_forces));
+  memset(cluster_force_info.cluster_forces, 0, sizeof(cluster_forces) * cluster_force_info.count);
+  
+  {
+    cluster_forces* cluster_force_iterator = cluster_force_info.cluster_forces;
+    for (linked_list_cluster *iter = self->gravity_clusters.clusters_list; iter; iter = iter->p_next) {
+      cluster_force_iterator->units = iter->data.units_list;
+      cluster_force_iterator->count = iter->data.units_count;
+      cluster_force_iterator->rigidbody2d = iter->data.rigidbody;
+      cluster_force_iterator->forces = calloc(cluster_force_iterator->count, sizeof(force_info));
+      memset(cluster_force_iterator->forces, 0, sizeof(force_info) * cluster_force_iterator->count);
+      cluster_force_iterator++;
+    }
+  }
+
+
+  for (uint i = 0; i < cluster_force_info.count; i++) {
+    cluster_forces* cluster_forces_i = cluster_force_info.cluster_forces + i;
+    for (uint j = i+1; j < cluster_force_info.count; j++) {
+      cluster_forces* cluster_forces_j = cluster_force_info.cluster_forces + j;
+      force_info *unit_a_force_iterator = cluster_forces_i->forces;
+      force_info *unit_b_force_iterator = cluster_forces_j->forces;
+      for (linked_list_GravitySimulationUnitPtr *unit_a = cluster_forces_i->units; unit_a; unit_a = unit_a->p_next) {
+        for (linked_list_GravitySimulationUnitPtr *unit_b = cluster_forces_j->units; unit_b; unit_b = unit_b->p_next) {
+          Vector2 position_a = gravity_simulation_unit_class_get_global_position(unit_a->data);
+          Vector2 position_b = gravity_simulation_unit_class_get_global_position(unit_b->data);
+          Vector2 r = {
+            .x = position_b.x - position_a.x,
+            .y = position_b.y - position_a.y,
+          };
+
+          double r2 = r.x * r.x + r.y * r.y;
+          double r_length = sqrt(r2);
+
+          Vector2 direction = {
+            .x = r.x / r_length,
+            .y = r.y / r_length,
+          };
+
+          double force_magnitude = G * unit_a->data->mass * unit_b->data->mass / r2;
+
+          Vector2 force = {
+            .x = direction.x * force_magnitude,
+            .y = direction.y * force_magnitude,
+          };
+
+          unit_a_force_iterator->force.x += force.x;
+          unit_a_force_iterator->force.y += force.y;
+
+          unit_a_force_iterator->point = gravity_simulation_unit_class_get_position(unit_a->data);
+
+          unit_a_force_iterator++;
+
+
+          unit_b_force_iterator->force.x -= force.x;
+          unit_b_force_iterator->force.y -= force.y;
+
+          unit_b_force_iterator->point = gravity_simulation_unit_class_get_position(unit_b->data);
+
+          unit_b_force_iterator++;
+        }
+      }
+    }
+  }
+
+  return cluster_force_info;
 }

@@ -2,7 +2,7 @@
 #define C94C2966_B644_4B19_B0E3_CDE07BA11608
 
 #include "gdextension_interface.h"
-#include "gravity_simulation_unit.h"
+#include "sys/types.h"
 #include <stdbool.h>
 
 // Struct to hold the node data.
@@ -12,8 +12,13 @@ typedef struct {
 
     bool visit_tree;
 
+    double G;
+
     // acceleration structure to not go through sub node every frame
-    struct linked_list_cluster *gravity_clusters; // array of GravitySimulationUnits grouped by RigidBody they belong to
+    struct gravity_clusters {
+        uint clusters_count;
+        struct linked_list_cluster* clusters_list;// array of GravitySimulationUnits grouped by RigidBody they belong to
+    } gravity_clusters;
 } GravitySimulation;
 
 // Bindings.
@@ -26,6 +31,9 @@ void gravity_simulation_class_call_virtual_with_data(GDExtensionClassInstancePtr
 
 // Constructor for the node.
 void gravity_simulation_class_constructor(GravitySimulation *self);
+
+void gravity_simulation_class_set_G(GravitySimulation* self, double G);
+double gravity_simulation_class_get_G(GravitySimulation* self);
 
 // Destructor for the node.
 void gravity_simulation_class_destructor(GravitySimulation *self);

@@ -19,11 +19,14 @@ struct Constructors
 {
     GDExtensionInterfaceStringNameNewWithLatin1Chars string_name_new_with_latin1_chars;
     GDExtensionVariantFromTypeConstructorFunc variant_from_string_name_constructor;
+    GDExtensionVariantFromTypeConstructorFunc variant_from_vector2_constructor;
     GDExtensionVariantFromTypeConstructorFunc variant_from_object_constructor;
     GDExtensionVariantFromTypeConstructorFunc variant_from_float_constructor;
     GDExtensionInterfaceStringNewWithUtf8Chars string_new_with_utf8_chars;
     
     GDExtensionTypeFromVariantConstructorFunc float_from_variant_constructor;
+    GDExtensionTypeFromVariantConstructorFunc vector2_from_variant_constructor;
+    GDExtensionTypeFromVariantConstructorFunc bool_from_variant_constructor;
     GDExtensionInterfaceVariantConstruct variant_construct;
 };
 
@@ -36,9 +39,15 @@ struct Destructors
 
 struct Methods
 {
+    GDExtensionMethodBindPtr engine_is_editor_hint;
+
     GDExtensionMethodBindPtr node_get_parent;
     GDExtensionMethodBindPtr node_get_children;
     GDExtensionMethodBindPtr node_get_tree;
+    GDExtensionMethodBindPtr node2d_get_position;
+    GDExtensionMethodBindPtr node2d_get_global_position;
+    GDExtensionMethodBindPtr rigidbody2d_apply_force;
+    
     GDExtensionMethodBindPtr object_connect;
 };
 
@@ -61,6 +70,7 @@ struct API
     GDExtensionInterfaceObjectSetInstance object_set_instance;
     GDExtensionInterfaceObjectMethodBindCall object_method_bind_call;
     GDExtensionInterfaceObjectSetInstanceBinding object_set_instance_binding;
+    GDExtensionInterfaceObjectGetInstanceBinding object_get_instance_binding;
     GDExtensionInterfaceObjectCastTo object_cast_to;
     GDExtensionInterfaceObjectGetInstanceFromId object_get_instance_from_id;
     
@@ -74,6 +84,8 @@ struct API
 
     GDExtensionInterfaceMemAlloc mem_alloc;
     GDExtensionInterfaceMemFree mem_free;
+
+    GDExtensionObjectPtr engine;
 };
 
 #ifndef API_NO_EXTERN
@@ -88,6 +100,7 @@ extern struct Operators operators;
 
 void load_api(GDExtensionInterfaceGetProcAddress p_get_proc_address);
 void bind_api();
+GDExtensionBool is_editor();
 
 void ptrcall_0_args_no_ret(void *method_userdata, GDExtensionClassInstancePtr p_instance, const GDExtensionConstTypePtr *p_args, GDExtensionTypePtr r_ret);
 void ptrcall_0_args_ret_float(void *method_userdata, GDExtensionClassInstancePtr p_instance, const GDExtensionConstTypePtr *p_args, GDExtensionTypePtr r_ret);

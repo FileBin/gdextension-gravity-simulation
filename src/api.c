@@ -38,6 +38,7 @@ void load_api(GDExtensionInterfaceGetProcAddress p_get_proc_address)
 
     api.object_set_instance = (GDExtensionInterfaceObjectSetInstance)p_get_proc_address("object_set_instance");
     api.object_set_instance_binding = (GDExtensionInterfaceObjectSetInstanceBinding)p_get_proc_address("object_set_instance_binding");
+    api.object_get_instance_binding = (GDExtensionInterfaceObjectGetInstanceBinding)p_get_proc_address("object_get_instance_binding");
     api.object_cast_to = (GDExtensionInterfaceObjectCastTo)p_get_proc_address("object_cast_to");
     api.object_get_instance_from_id = (GDExtensionInterfaceObjectGetInstanceFromId)p_get_proc_address("object_get_instance_from_id");
     api.mem_alloc = (GDExtensionInterfaceMemAlloc)p_get_proc_address("mem_alloc");
@@ -45,10 +46,16 @@ void load_api(GDExtensionInterfaceGetProcAddress p_get_proc_address)
 
     // Constructors.
     constructors.string_name_new_with_latin1_chars = (GDExtensionInterfaceStringNameNewWithLatin1Chars)p_get_proc_address("string_name_new_with_latin1_chars");
+    
     constructors.variant_from_string_name_constructor = (GDExtensionVariantFromTypeConstructorFunc)api.get_variant_from_type_constructor(GDEXTENSION_VARIANT_TYPE_STRING_NAME);
     constructors.variant_from_object_constructor = (GDExtensionVariantFromTypeConstructorFunc)api.get_variant_from_type_constructor(GDEXTENSION_VARIANT_TYPE_OBJECT);
-    constructors.float_from_variant_constructor = (GDExtensionTypeFromVariantConstructorFunc)api.get_variant_to_type_constructor(GDEXTENSION_VARIANT_TYPE_FLOAT);
+    constructors.variant_from_vector2_constructor = (GDExtensionVariantFromTypeConstructorFunc)api.get_variant_from_type_constructor(GDEXTENSION_VARIANT_TYPE_VECTOR2);
     constructors.variant_from_float_constructor = (GDExtensionVariantFromTypeConstructorFunc)api.get_variant_from_type_constructor(GDEXTENSION_VARIANT_TYPE_FLOAT);
+
+    constructors.float_from_variant_constructor = (GDExtensionTypeFromVariantConstructorFunc)api.get_variant_to_type_constructor(GDEXTENSION_VARIANT_TYPE_FLOAT);
+    constructors.vector2_from_variant_constructor = (GDExtensionTypeFromVariantConstructorFunc)api.get_variant_to_type_constructor(GDEXTENSION_VARIANT_TYPE_VECTOR2);
+    constructors.bool_from_variant_constructor = (GDExtensionTypeFromVariantConstructorFunc)api.get_variant_to_type_constructor(GDEXTENSION_VARIANT_TYPE_BOOL);
+    
     constructors.string_new_with_utf8_chars = (GDExtensionInterfaceStringNewWithUtf8Chars)p_get_proc_address("string_new_with_utf8_chars");
     constructors.variant_construct = (GDExtensionInterfaceVariantConstruct)p_get_proc_address("variant_construct");
     
@@ -59,13 +66,35 @@ void load_api(GDExtensionInterfaceGetProcAddress p_get_proc_address)
     
     // Operators
     operators.string_name_equal = variant_get_ptr_operator_evaluator(GDEXTENSION_VARIANT_OP_EQUAL, GDEXTENSION_VARIANT_TYPE_STRING_NAME, GDEXTENSION_VARIANT_TYPE_STRING_NAME);
+
+
+    StringName engine_name;
+    constructors.string_name_new_with_latin1_chars(&engine_name, "Engine", false);
+    api.engine = api.global_get_singleton(&engine_name);
+    destructors.string_name_destructor(&engine_name);
 }
 
 void bind_api() {
+    methods.engine_is_editor_hint = get_method_bind("Engine", "is_editor_hint", 36873697);
+    methods.object_connect = get_method_bind("Object", "connect", 1518946055);
+    methods.node2d_get_position = get_method_bind("Node2D", "get_position", 3341600327);
+    methods.node2d_get_global_position = get_method_bind("Node2D", "get_global_position", 3341600327);
     methods.node_get_parent = get_method_bind("Node", "get_parent", 3160264692);
     methods.node_get_children = get_method_bind("Node", "get_children", 873284517);
     methods.node_get_tree = get_method_bind("Node", "get_tree", 2958820483);
-    methods.object_connect = get_method_bind("Object", "connect", 1518946055);
+    methods.rigidbody2d_apply_force = get_method_bind("RigidBody2D", "apply_force", 4288681949);
+}
+
+GDExtensionBool is_editor() {
+    GDExtensionBool result;
+    Variant ret;
+
+    GDExtensionConstVariantPtr args[] = {};
+    api.object_method_bind_call(methods.engine_is_editor_hint, api.engine, args,
+                                0, &ret, NULL);
+    
+    constructors.bool_from_variant_constructor(&result, &ret);
+    return result;
 }
 
 void ptrcall_0_args_ret_float(void *method_userdata, GDExtensionClassInstancePtr p_instance, const GDExtensionConstTypePtr *p_args, GDExtensionTypePtr r_ret)

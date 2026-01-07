@@ -63,9 +63,9 @@ void initialize_gdexample_module(void *p_userdata, GDExtensionInitializationLeve
     destructors.string_name_destructor(&simulation_class_name);
 
     // Bind methods.
-    bind_api();
     gravity_simulation_class_bind_methods();
     gravity_simulation_unit_class_bind_methods();
+    bind_api();
     // Destruct things.
 }
 
