@@ -54,7 +54,7 @@ void *gravity_simulation_class_get_virtual_with_data(
     return (void *)gravity_simulation_class_ready;
   }
 
-  if (is_string_name_equal(p_name, "_process")) {
+  if (is_string_name_equal(p_name, "_physics_process")) {
     return (void *)gravity_simulation_class_process;
   }
 
@@ -289,9 +289,9 @@ void update_clusters(GravitySimulation *self) {
       GDExtensionObjectPtr found_unit =
           api.object_cast_to(node, gravity_simulation_unit_class_tag);
 
-      if (found_unit) {
+      if (found_unit && current_cluster_ptr) {
         GravitySimulationUnitPtr unit = api.object_get_instance_binding(found_unit, class_library, NULL);
-        if (current_cluster_ptr && unit) {
+        if (unit) {
           linked_list_GravitySimulationUnitPtr_push_front(&current_cluster_ptr->units_list, unit);
           current_cluster_ptr->units_count++;
         }
@@ -332,11 +332,9 @@ void update_clusters(GravitySimulation *self) {
     }
 
     destructors.variant_destroy(&children_variant_ret);
-
-    if (error.error != GDEXTENSION_CALL_OK) {
-      return;
-    }
   }
+
+  linked_list_GDExtensionObjectPtr_destroy(stack);
 
   self->gravity_clusters.clusters_count = clusters_count;
   linked_list_cluster *old_list = self->gravity_clusters.clusters_list;
@@ -373,8 +371,12 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
       cluster_force_iterator->units = iter->data.units_list;
       cluster_force_iterator->count = iter->data.units_count;
       cluster_force_iterator->rigidbody2d = iter->data.rigidbody;
-      cluster_force_iterator->forces = calloc(cluster_force_iterator->count, sizeof(force_info));
-      memset(cluster_force_iterator->forces, 0, sizeof(force_info) * cluster_force_iterator->count);
+      if(cluster_force_iterator->count < 1) {
+        cluster_force_iterator->forces = 0;
+      } else {
+        cluster_force_iterator->forces = calloc(cluster_force_iterator->count, sizeof(force_info));
+        memset(cluster_force_iterator->forces, 0, sizeof(force_info) * cluster_force_iterator->count);
+      }
       cluster_force_iterator++;
     }
   }
@@ -385,8 +387,8 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
     for (uint j = i+1; j < cluster_force_info.count; j++) {
       cluster_forces* cluster_forces_j = cluster_force_info.cluster_forces + j;
       force_info *unit_a_force_iterator = cluster_forces_i->forces;
-      force_info *unit_b_force_iterator = cluster_forces_j->forces;
       for (linked_list_GravitySimulationUnitPtr *unit_a = cluster_forces_i->units; unit_a; unit_a = unit_a->p_next) {
+        force_info *unit_b_force_iterator = cluster_forces_j->forces;
         for (linked_list_GravitySimulationUnitPtr *unit_b = cluster_forces_j->units; unit_b; unit_b = unit_b->p_next) {
           Vector2 position_a = gravity_simulation_unit_class_get_global_position(unit_a->data);
           Vector2 position_b = gravity_simulation_unit_class_get_global_position(unit_b->data);
@@ -413,18 +415,15 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
           unit_a_force_iterator->force.x += force.x;
           unit_a_force_iterator->force.y += force.y;
 
-          unit_a_force_iterator->point = gravity_simulation_unit_class_get_position(unit_a->data);
-
-          unit_a_force_iterator++;
-
-
           unit_b_force_iterator->force.x -= force.x;
           unit_b_force_iterator->force.y -= force.y;
 
           unit_b_force_iterator->point = gravity_simulation_unit_class_get_position(unit_b->data);
-
           unit_b_force_iterator++;
         }
+
+        unit_a_force_iterator->point = gravity_simulation_unit_class_get_position(unit_a->data);
+        unit_a_force_iterator++;
       }
     }
   }
