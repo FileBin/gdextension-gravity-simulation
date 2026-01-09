@@ -1,9 +1,11 @@
 #ifndef C94C2966_B644_4B19_B0E3_CDE07BA11608
 #define C94C2966_B644_4B19_B0E3_CDE07BA11608
 
+#include "chunk_allocator.h"
 #include "gdextension_interface.h"
 #include "sys/types.h"
 #include <stdbool.h>
+#include <stdint.h>
 
 // Struct to hold the node data.
 typedef struct {
@@ -16,9 +18,13 @@ typedef struct {
 
     // acceleration structure to not go through sub node every frame
     struct gravity_clusters {
+        // memory allocation acceleration strucutre
+        chunk_allocator memory;
         uint clusters_count;
-        struct linked_list_cluster* clusters_list;// array of GravitySimulationUnits grouped by RigidBody they belong to
+        uint all_units_count;
+        uint32_t clusters_list_offset;// array of GravitySimulationUnits grouped by RigidBody they belong to
     } gravity_clusters;
+
 } GravitySimulation;
 
 // Bindings.
