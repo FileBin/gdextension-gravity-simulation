@@ -77,7 +77,6 @@ void load_api(GDExtensionInterfaceGetProcAddress p_get_proc_address)
 void bind_api() {
     methods.engine_is_editor_hint = get_method_bind("Engine", "is_editor_hint", 36873697);
     methods.object_connect = get_method_bind("Object", "connect", 1518946055);
-    methods.node2d_get_position = get_method_bind("Node2D", "get_position", 3341600327);
     methods.node2d_get_global_position = get_method_bind("Node2D", "get_global_position", 3341600327);
     methods.node_get_parent = get_method_bind("Node", "get_parent", 3160264692);
     methods.node_get_children = get_method_bind("Node", "get_children", 873284517);
@@ -94,7 +93,20 @@ GDExtensionBool is_editor() {
                                 0, &ret, NULL);
     
     constructors.bool_from_variant_constructor(&result, &ret);
+    destructors.variant_destroy(&ret);
     return result;
+}
+
+Vector2 node2d_get_global_position(GDExtensionObjectPtr self) {
+    Vector2 position;
+    Variant ret;
+    GDExtensionConstVariantPtr args[] = {};
+    api.object_method_bind_call(methods.node2d_get_global_position, self, args,
+                                0, &ret, NULL);
+    
+    constructors.vector2_from_variant_constructor(&position, &ret);
+    destructors.variant_destroy(&ret);
+    return position;
 }
 
 void ptrcall_0_args_ret_float(void *method_userdata, GDExtensionClassInstancePtr p_instance, const GDExtensionConstTypePtr *p_args, GDExtensionTypePtr r_ret)

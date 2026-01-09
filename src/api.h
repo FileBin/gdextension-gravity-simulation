@@ -8,6 +8,7 @@ just so we don't have to keep loading the same methods again.
 #ifndef C71A4301_2BAF_4AD7_8964_BFC167D79A0E
 #define C71A4301_2BAF_4AD7_8964_BFC167D79A0E
 
+#include "defs.h"
 #include "gdextension_interface.h"
 #include <stdbool.h>
 
@@ -44,7 +45,6 @@ struct Methods
     GDExtensionMethodBindPtr node_get_parent;
     GDExtensionMethodBindPtr node_get_children;
     GDExtensionMethodBindPtr node_get_tree;
-    GDExtensionMethodBindPtr node2d_get_position;
     GDExtensionMethodBindPtr node2d_get_global_position;
     GDExtensionMethodBindPtr rigidbody2d_apply_force;
     
@@ -101,6 +101,8 @@ extern struct Operators operators;
 void load_api(GDExtensionInterfaceGetProcAddress p_get_proc_address);
 void bind_api();
 GDExtensionBool is_editor();
+
+Vector2 node2d_get_global_position(GDExtensionObjectPtr self);
 
 void ptrcall_0_args_no_ret(void *method_userdata, GDExtensionClassInstancePtr p_instance, const GDExtensionConstTypePtr *p_args, GDExtensionTypePtr r_ret);
 void ptrcall_0_args_ret_float(void *method_userdata, GDExtensionClassInstancePtr p_instance, const GDExtensionConstTypePtr *p_args, GDExtensionTypePtr r_ret);

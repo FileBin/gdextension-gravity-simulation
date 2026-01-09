@@ -384,14 +384,24 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
 
   for (uint i = 0; i < cluster_force_info.count; i++) {
     cluster_forces* cluster_forces_i = cluster_force_info.cluster_forces + i;
+
+      Vector2 cluster_position_i = node2d_get_global_position(cluster_forces_i->rigidbody2d);
+
+
     for (uint j = i+1; j < cluster_force_info.count; j++) {
       cluster_forces* cluster_forces_j = cluster_force_info.cluster_forces + j;
+
+      Vector2 cluster_position_j = node2d_get_global_position(cluster_forces_j->rigidbody2d);
+
+
       force_info *unit_a_force_iterator = cluster_forces_i->forces;
       for (linked_list_GravitySimulationUnitPtr *unit_a = cluster_forces_i->units; unit_a; unit_a = unit_a->p_next) {
+        Vector2 position_a = node2d_get_global_position(unit_a->data->node2d);
+
         force_info *unit_b_force_iterator = cluster_forces_j->forces;
         for (linked_list_GravitySimulationUnitPtr *unit_b = cluster_forces_j->units; unit_b; unit_b = unit_b->p_next) {
-          Vector2 position_a = gravity_simulation_unit_class_get_global_position(unit_a->data);
-          Vector2 position_b = gravity_simulation_unit_class_get_global_position(unit_b->data);
+          Vector2 position_b = node2d_get_global_position(unit_b->data->node2d);
+
           Vector2 r = {
             .x = position_b.x - position_a.x,
             .y = position_b.y - position_a.y,
@@ -418,11 +428,13 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
           unit_b_force_iterator->force.x -= force.x;
           unit_b_force_iterator->force.y -= force.y;
 
-          unit_b_force_iterator->point = gravity_simulation_unit_class_get_position(unit_b->data);
+          unit_b_force_iterator->point.x = position_b.x - cluster_position_j.x;
+          unit_b_force_iterator->point.y = position_b.y - cluster_position_j.y;
           unit_b_force_iterator++;
         }
 
-        unit_a_force_iterator->point = gravity_simulation_unit_class_get_position(unit_a->data);
+        unit_a_force_iterator->point.x = position_a.x - cluster_position_i.x;
+        unit_a_force_iterator->point.y = position_a.y - cluster_position_i.y;
         unit_a_force_iterator++;
       }
     }

@@ -23,7 +23,5 @@ void gravity_simulation_unit_class_call_virtual_with_data(GDExtensionClassInstan
 
 void gravity_simulation_unit_class_set_mass(GravitySimulationUnit* self, double mass);
 double gravity_simulation_unit_class_get_mass(GravitySimulationUnit* self);
-Vector2 gravity_simulation_unit_class_get_position(GravitySimulationUnit* self);
-Vector2 gravity_simulation_unit_class_get_global_position(GravitySimulationUnit* self);
 
 #endif /* DFA6CF0F_50F8_453D_9AFF_D64DB11F716D */
