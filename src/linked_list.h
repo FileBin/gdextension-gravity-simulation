@@ -85,3 +85,5 @@ void PPCAT(LINKED_LIST_NAME, _destroy)(LINKED_LIST_PTR_TYPE start_node LINKED_LI
     iter = next;
   }
 }
+
+#define NULL ((void*)0)

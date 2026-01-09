@@ -21,6 +21,7 @@ typedef struct {
         // memory allocation acceleration strucutre
         chunk_allocator memory;
         uint clusters_count;
+        uint all_units_count;
         uint32_t clusters_list_offset;// array of GravitySimulationUnits grouped by RigidBody they belong to
     } gravity_clusters;
 

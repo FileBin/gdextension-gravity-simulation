@@ -44,6 +44,8 @@ typedef struct {
 #include "linked_list.h"
 #undef LINKED_LIST_TYPE
 
+
+
 cluster *ptr_cluster(void* memory, uint32_t offset);
 linked_list_offset_t *ptr_linked_list_cluster(void* memory, uint32_t offset);
 linked_list_GravitySimulationUnitPtr *ptr_linked_list_GravitySimulationUnitPtr(void* memory, uint32_t offset);
@@ -59,6 +61,7 @@ const GDExtensionInstanceBindingCallbacks
 
 void gravity_simulation_class_constructor(GravitySimulation *self) {
   self->gravity_clusters.clusters_count = 0;
+  self->gravity_clusters.all_units_count = 0;
   self->gravity_clusters.clusters_list_offset = 0;
   init_chunk_with_size(&self->gravity_clusters.memory, INITIAL_MEMORY_SIZE);
 
@@ -219,6 +222,7 @@ typedef struct {
   linked_list_GravitySimulationUnitPtr* units;
   GDExtensionObjectPtr rigidbody2d;
   uint count;
+  int skip_probability;
 } cluster_forces;
 
 typedef struct {
@@ -278,6 +282,7 @@ void update_clusters(GravitySimulation *self) {
 
   offset_t clusters = 0;
   uint clusters_count = 0;
+  uint all_units_count = 0;
 
   static bool stack_memory_initialized = false;
   if (!stack_memory_initialized) {
@@ -309,6 +314,13 @@ void update_clusters(GravitySimulation *self) {
       offset_t new_cluster_offset = allocate_memory_in_chunk(cluster_memory, sizeof(cluster));
 
       memcpy(ptr_from_chunk_offset(cluster_memory, new_cluster_offset), &new_cluster, sizeof(cluster));
+      
+      if (clusters) {
+        all_units_count +=
+            ptr_cluster(cluster_memory,
+                        ptr_linked_list_cluster(cluster_memory, clusters)->data)
+                ->units_count;
+      }
 
       linked_list_offset_t_push_front(&clusters, new_cluster_offset, cluster_memory);
       clusters_count++;
@@ -395,11 +407,12 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
 
   cluster_force_info.count = self->gravity_clusters.clusters_count;
 
+  allocate_memory_in_chunk(&calculation_buffer_memory, cluster_force_info.count * sizeof(cluster_forces) + self->gravity_clusters.all_units_count * sizeof(force_info));
+  memset(calculation_buffer_memory.memory, 0, calculation_buffer_memory.allocated_bytes);
   free_all_allocations_in_chunk(&calculation_buffer_memory);
   allocate_memory_in_chunk(&calculation_buffer_memory, cluster_force_info.count * sizeof(cluster_forces));
 
   cluster_force_info.cluster_forces = calculation_buffer_memory.memory;
-  memset(cluster_force_info.cluster_forces, 0, sizeof(cluster_forces) * cluster_force_info.count);
 
   {
     cluster_forces *cluster_force_iterator = cluster_force_info.cluster_forces;
@@ -412,13 +425,20 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
       cluster_force_iterator->units = ptr_linked_list_GravitySimulationUnitPtr(cluster_memory, data->units_list);
       cluster_force_iterator->count = data->units_count;
       cluster_force_iterator->rigidbody2d = data->rigidbody;
-      if (cluster_force_iterator->count < 1) {
-        cluster_force_iterator->forces = 0;
-      } else {
+
+      double probability = 0xffffffff;
+
+      if (data->units_count > 10) {
+        probability *= (0.5 - 10. / data->units_count);
+        cluster_force_iterator->skip_probability = probability;
+      }
+      else {
+        cluster_force_iterator->skip_probability = 0x80000000;
+      }
+        
+      if (data->units_count > 0) {
         cluster_force_iterator->forces =
-            calloc(cluster_force_iterator->count, sizeof(force_info));
-        memset(cluster_force_iterator->forces, 0,
-               sizeof(force_info) * cluster_force_iterator->count);
+        ptr_from_chunk_offset(&calculation_buffer_memory, allocate_memory_in_chunk(&calculation_buffer_memory, data->units_count * sizeof(force_info)));
       }
       cluster_force_iterator++;
     }
@@ -437,11 +457,23 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
 
 
       force_info *unit_a_force_iterator = cluster_forces_i->forces;
+      double unit_a_accumulated_mass = 0;
       for (linked_list_GravitySimulationUnitPtr *unit_a = cluster_forces_i->units; unit_a; unit_a = ptr_linked_list_GravitySimulationUnitPtr(cluster_memory, unit_a->p_next)) {
+        unit_a_accumulated_mass += unit_a->data->mass;
+        if (rand() < cluster_forces_i->skip_probability) {
+          unit_a_force_iterator++;
+          continue;
+        }
         Vector2 position_a = node2d_get_global_position(unit_a->data->node2d);
 
         force_info *unit_b_force_iterator = cluster_forces_j->forces;
+        double unit_b_accumulated_mass = 0;
         for (linked_list_GravitySimulationUnitPtr *unit_b = cluster_forces_j->units; unit_b; unit_b = ptr_linked_list_GravitySimulationUnitPtr(cluster_memory, unit_b->p_next)) {
+          unit_b_accumulated_mass += unit_b->data->mass;
+          if (rand() < cluster_forces_j->skip_probability) {
+            unit_b_force_iterator++;
+            continue;
+          }
           Vector2 position_b = node2d_get_global_position(unit_b->data->node2d);
 
           Vector2 r = {
@@ -457,8 +489,7 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
             .y = r.y / r_length,
           };
 
-          double force_magnitude = G * unit_a->data->mass * unit_b->data->mass / r2;
-
+          double force_magnitude = G * unit_a_accumulated_mass * unit_b_accumulated_mass / r2;
           Vector2 force = {
             .x = direction.x * force_magnitude,
             .y = direction.y * force_magnitude,
@@ -472,11 +503,15 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
 
           unit_b_force_iterator->point.x = position_b.x - cluster_position_j.x;
           unit_b_force_iterator->point.y = position_b.y - cluster_position_j.y;
+          
+          unit_b_accumulated_mass = 0;
           unit_b_force_iterator++;
         }
 
         unit_a_force_iterator->point.x = position_a.x - cluster_position_i.x;
         unit_a_force_iterator->point.y = position_a.y - cluster_position_i.y;
+        
+        unit_a_accumulated_mass = 0;
         unit_a_force_iterator++;
       }
     }
