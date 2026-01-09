@@ -259,13 +259,7 @@ void gravity_simulation_class_process(GravitySimulation *self, double delta) {
       destructors.variant_destroy(&position);
       destructors.variant_destroy(&ret);
     }
-
-    if (cluster_forces.forces)
-      free(cluster_forces.forces);
   }
-
-  if (simulation_result.cluster_forces)
-    free(simulation_result.cluster_forces);
 }
 
 void gravity_simulation_class_on_tree_changed(GravitySimulation *self) {
@@ -282,7 +276,7 @@ void update_clusters(GravitySimulation *self) {
   void *gravity_simulation_unit_class_tag = classdb_get_class_tag("GravitySimulationUnit");
   void *rigidbody2d_class_tag = classdb_get_class_tag("RigidBody2D");
 
-  uint32_t clusters = 0;
+  offset_t clusters = 0;
   uint clusters_count = 0;
 
   static bool stack_memory_initialized = false;
@@ -291,7 +285,7 @@ void update_clusters(GravitySimulation *self) {
     stack_memory_initialized = true;
   }
 
-  uint32_t stack = 0;
+  offset_t stack = 0;
 
   linked_list_GDExtensionObjectPtr_push_front(&stack, self->object, &stack_memory);
 
@@ -375,7 +369,15 @@ void update_clusters(GravitySimulation *self) {
   self->gravity_clusters.clusters_list_offset = clusters;
 }
 
+chunk_allocator calculation_buffer_memory;
+
 cluster_force_info run_simulation_CPU(GravitySimulation *self) {
+  static bool memory_initialized = false;
+  if (!memory_initialized) {
+    init_chunk_with_size(&calculation_buffer_memory, INITIAL_MEMORY_SIZE);
+    memory_initialized = true;
+  }
+
   chunk_allocator *cluster_memory = &self->gravity_clusters.memory;
 
   if (self->gravity_clusters.clusters_count < 1) {
@@ -393,7 +395,10 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
 
   cluster_force_info.count = self->gravity_clusters.clusters_count;
 
-  cluster_force_info.cluster_forces = calloc(cluster_force_info.count, sizeof(cluster_forces));
+  free_all_allocations_in_chunk(&calculation_buffer_memory);
+  allocate_memory_in_chunk(&calculation_buffer_memory, cluster_force_info.count * sizeof(cluster_forces));
+
+  cluster_force_info.cluster_forces = calculation_buffer_memory.memory;
   memset(cluster_force_info.cluster_forces, 0, sizeof(cluster_forces) * cluster_force_info.count);
 
   {
