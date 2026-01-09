@@ -1,5 +1,6 @@
 #include "gravity_simulation.h"
 #include "api.h"
+#include "chunk_allocator.h"
 #include "defs.h"
 #include "gdextension_interface.h"
 #include "gravity_simulation_unit.h"
@@ -7,8 +8,19 @@
 #include <math.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+#define INITIAL_MEMORY_SIZE 64
+
+#define LINKED_LIST_USE_CUSTOM_MALLOC
+#define LINKED_LIST_MALLOC_ARGUMENT , chunk_allocator* memory
+#define LINKED_LIST_MALLOC_CALL(size) allocate_memory_in_chunk(memory, size)
+#define LINKED_LIST_MALLOC_PASS , memory
+#define LINKED_LIST_FREE_CALL(_) 
+#define LINKED_LIST_READ_PTR(ptr) ptr_from_chunk_offset(memory, ptr)
+#define LINKED_LIST_PTR_TYPE offset_t
 
 #define LINKED_LIST_TYPE GDExtensionObjectPtr
 #include "linked_list.h"
@@ -25,12 +37,17 @@ extern const GDExtensionInstanceBindingCallbacks gravity_simulation_unit_class_b
 typedef struct {
   GDExtensionObjectPtr rigidbody;
   uint units_count;
-  linked_list_GravitySimulationUnitPtr *units_list; // list of pointers to GravitySimulationUnit objects in scene tree
+  offset_t units_list; // list of pointers to GravitySimulationUnit objects in scene tree
 } cluster;
 
-#define LINKED_LIST_TYPE cluster
+#define LINKED_LIST_TYPE offset_t
 #include "linked_list.h"
 #undef LINKED_LIST_TYPE
+
+cluster *ptr_cluster(void* memory, uint32_t offset);
+linked_list_offset_t *ptr_linked_list_cluster(void* memory, uint32_t offset);
+linked_list_GravitySimulationUnitPtr *ptr_linked_list_GravitySimulationUnitPtr(void* memory, uint32_t offset);
+linked_list_GDExtensionObjectPtr *ptr_linked_list_GDExtensionObjectPtr(void* memory, uint32_t offset);
 
 const GDExtensionInstanceBindingCallbacks
     gravity_simulation_class_binding_callbacks = {
@@ -39,9 +56,11 @@ const GDExtensionInstanceBindingCallbacks
         .reference_callback = NULL,
 };
 
+
 void gravity_simulation_class_constructor(GravitySimulation *self) {
   self->gravity_clusters.clusters_count = 0;
-  self->gravity_clusters.clusters_list = NULL;
+  self->gravity_clusters.clusters_list_offset = 0;
+  init_chunk_with_size(&self->gravity_clusters.memory, INITIAL_MEMORY_SIZE);
 
   self->visit_tree = true;
 
@@ -253,47 +272,63 @@ void gravity_simulation_class_on_tree_changed(GravitySimulation *self) {
   self->visit_tree = true;
 }
 
+chunk_allocator stack_memory;
+
 void update_clusters(GravitySimulation *self) {
+  chunk_allocator *cluster_memory = &self->gravity_clusters.memory;
+  free_all_allocations_in_chunk(&self->gravity_clusters.memory);
+  self->gravity_clusters.clusters_list_offset = 0;
 
   void *gravity_simulation_unit_class_tag = classdb_get_class_tag("GravitySimulationUnit");
   void *rigidbody2d_class_tag = classdb_get_class_tag("RigidBody2D");
 
-  linked_list_cluster *clusters = 0;
+  uint32_t clusters = 0;
   uint clusters_count = 0;
 
-  linked_list_GDExtensionObjectPtr *stack = 0;
+  static bool stack_memory_initialized = false;
+  if (!stack_memory_initialized) {
+    init_chunk_with_size(&stack_memory, INITIAL_MEMORY_SIZE);
+    stack_memory_initialized = true;
+  }
 
-  linked_list_GDExtensionObjectPtr_push_front(&stack, self->object);
+  uint32_t stack = 0;
 
-  cluster* current_cluster_ptr = 0;
+  linked_list_GDExtensionObjectPtr_push_front(&stack, self->object, &stack_memory);
+
+  offset_t current_cluster = 0;
 
   while (stack) {
     Variant children_variant_ret, child_variant_ret;
     GDExtensionCallError error;
-    GDExtensionObjectPtr node = linked_list_GDExtensionObjectPtr_pop_front(&stack);
+    GDExtensionObjectPtr node = linked_list_GDExtensionObjectPtr_pop_front(&stack, &stack_memory);
 
     GDExtensionObjectPtr found_rigidbody2d =
         api.object_cast_to(node, rigidbody2d_class_tag);
 
     if (found_rigidbody2d) {
-      cluster new_cluster;
+      cluster new_cluster = {
+        .rigidbody = found_rigidbody2d,
+        .units_list = 0,
+        .units_count = 0,
+      };
 
-      new_cluster.rigidbody = found_rigidbody2d;
-      new_cluster.units_list = 0;
-      new_cluster.units_count = 0;
-      linked_list_cluster_push_front(&clusters, new_cluster);
+      offset_t new_cluster_offset = allocate_memory_in_chunk(cluster_memory, sizeof(cluster));
+
+      memcpy(ptr_from_chunk_offset(cluster_memory, new_cluster_offset), &new_cluster, sizeof(cluster));
+
+      linked_list_offset_t_push_front(&clusters, new_cluster_offset, cluster_memory);
       clusters_count++;
-      current_cluster_ptr = &clusters->data;
+      current_cluster = ptr_linked_list_cluster(cluster_memory, clusters)->data;
     } else {
 
       GDExtensionObjectPtr found_unit =
           api.object_cast_to(node, gravity_simulation_unit_class_tag);
 
-      if (found_unit && current_cluster_ptr) {
+      if (found_unit && current_cluster) {
         GravitySimulationUnitPtr unit = api.object_get_instance_binding(found_unit, class_library, NULL);
         if (unit) {
-          linked_list_GravitySimulationUnitPtr_push_front(&current_cluster_ptr->units_list, unit);
-          current_cluster_ptr->units_count++;
+          linked_list_GravitySimulationUnitPtr_push_front(&ptr_cluster(cluster_memory, current_cluster)->units_list, unit, cluster_memory);
+          ptr_cluster(cluster_memory, current_cluster)->units_count++;
         }
       }
     }
@@ -320,7 +355,7 @@ void update_clusters(GravitySimulation *self) {
         if (child_instance_id) {
           GDExtensionObjectPtr child_node = api.object_get_instance_from_id(child_instance_id);
 
-          linked_list_GDExtensionObjectPtr_push_front(&stack, child_node);
+          linked_list_GDExtensionObjectPtr_push_front(&stack, child_node, &stack_memory);
         }
       }
 
@@ -334,19 +369,15 @@ void update_clusters(GravitySimulation *self) {
     destructors.variant_destroy(&children_variant_ret);
   }
 
-  linked_list_GDExtensionObjectPtr_destroy(stack);
+  free_all_allocations_in_chunk(&stack_memory);
 
   self->gravity_clusters.clusters_count = clusters_count;
-  linked_list_cluster *old_list = self->gravity_clusters.clusters_list;
-  self->gravity_clusters.clusters_list = clusters;
-
-  for (linked_list_cluster *iter = old_list; iter; iter = iter->p_next) {
-    linked_list_GravitySimulationUnitPtr_destroy(iter->data.units_list);
-  }
-  linked_list_cluster_destroy(old_list);
+  self->gravity_clusters.clusters_list_offset = clusters;
 }
 
 cluster_force_info run_simulation_CPU(GravitySimulation *self) {
+  chunk_allocator *cluster_memory = &self->gravity_clusters.memory;
+
   if (self->gravity_clusters.clusters_count < 1) {
     cluster_force_info empty = {
       .count = 0,
@@ -364,23 +395,29 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
 
   cluster_force_info.cluster_forces = calloc(cluster_force_info.count, sizeof(cluster_forces));
   memset(cluster_force_info.cluster_forces, 0, sizeof(cluster_forces) * cluster_force_info.count);
-  
+
   {
-    cluster_forces* cluster_force_iterator = cluster_force_info.cluster_forces;
-    for (linked_list_cluster *iter = self->gravity_clusters.clusters_list; iter; iter = iter->p_next) {
-      cluster_force_iterator->units = iter->data.units_list;
-      cluster_force_iterator->count = iter->data.units_count;
-      cluster_force_iterator->rigidbody2d = iter->data.rigidbody;
-      if(cluster_force_iterator->count < 1) {
+    cluster_forces *cluster_force_iterator = cluster_force_info.cluster_forces;
+    for (linked_list_offset_t *iter = ptr_linked_list_cluster(
+             cluster_memory, self->gravity_clusters.clusters_list_offset);
+         iter; iter = ptr_linked_list_cluster(cluster_memory, iter->p_next)) {
+
+      cluster *data = ptr_cluster(cluster_memory, iter->data);
+
+      cluster_force_iterator->units = ptr_linked_list_GravitySimulationUnitPtr(cluster_memory, data->units_list);
+      cluster_force_iterator->count = data->units_count;
+      cluster_force_iterator->rigidbody2d = data->rigidbody;
+      if (cluster_force_iterator->count < 1) {
         cluster_force_iterator->forces = 0;
       } else {
-        cluster_force_iterator->forces = calloc(cluster_force_iterator->count, sizeof(force_info));
-        memset(cluster_force_iterator->forces, 0, sizeof(force_info) * cluster_force_iterator->count);
+        cluster_force_iterator->forces =
+            calloc(cluster_force_iterator->count, sizeof(force_info));
+        memset(cluster_force_iterator->forces, 0,
+               sizeof(force_info) * cluster_force_iterator->count);
       }
       cluster_force_iterator++;
     }
   }
-
 
   for (uint i = 0; i < cluster_force_info.count; i++) {
     cluster_forces* cluster_forces_i = cluster_force_info.cluster_forces + i;
@@ -395,11 +432,11 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
 
 
       force_info *unit_a_force_iterator = cluster_forces_i->forces;
-      for (linked_list_GravitySimulationUnitPtr *unit_a = cluster_forces_i->units; unit_a; unit_a = unit_a->p_next) {
+      for (linked_list_GravitySimulationUnitPtr *unit_a = cluster_forces_i->units; unit_a; unit_a = ptr_linked_list_GravitySimulationUnitPtr(cluster_memory, unit_a->p_next)) {
         Vector2 position_a = node2d_get_global_position(unit_a->data->node2d);
 
         force_info *unit_b_force_iterator = cluster_forces_j->forces;
-        for (linked_list_GravitySimulationUnitPtr *unit_b = cluster_forces_j->units; unit_b; unit_b = unit_b->p_next) {
+        for (linked_list_GravitySimulationUnitPtr *unit_b = cluster_forces_j->units; unit_b; unit_b = ptr_linked_list_GravitySimulationUnitPtr(cluster_memory, unit_b->p_next)) {
           Vector2 position_b = node2d_get_global_position(unit_b->data->node2d);
 
           Vector2 r = {
@@ -441,4 +478,20 @@ cluster_force_info run_simulation_CPU(GravitySimulation *self) {
   }
 
   return cluster_force_info;
+}
+
+linked_list_offset_t *ptr_linked_list_cluster(void* memory, uint32_t offset) {
+  return ptr_from_chunk_offset(memory, offset);
+}
+
+cluster *ptr_cluster(void* memory, uint32_t offset) {
+  return ptr_from_chunk_offset(memory, offset);
+}
+
+linked_list_GravitySimulationUnitPtr *ptr_linked_list_GravitySimulationUnitPtr(void* memory, uint32_t offset) {
+  return ptr_from_chunk_offset(memory, offset);
+}
+
+linked_list_GDExtensionObjectPtr *ptr_linked_list_GDExtensionObjectPtr(void* memory, uint32_t offset) {
+  return ptr_from_chunk_offset(memory, offset);
 }
